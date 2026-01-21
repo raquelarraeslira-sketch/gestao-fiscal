@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão Fiscal | Grupo Franciosi</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');
+        body { font-family: 'Aptos Narrow', 'Inter', sans-serif; background-color: #f4f7f6; color: #1a2e24; font-size: 11pt; }
+        .bg-franciosi-deep-green { background-color: #1B3D2F; }
+        .text-franciosi-deep-green { color: #1B3D2F; }
+        .kpi-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); border: 1px solid #e5e7eb; border-left: 6px solid #1B3D2F; }
+        .tab-active { border-bottom: 4px solid #F5A623; color: #1B3D2F; font-weight: 800; }
+        tr:hover { background-color: #f0f4f2; transition: 0.2s; }
+    </style>
+</head>
+<body class="antialiased">
+
+    <header class="bg-white border-b-2 border-slate-200">
+        <div class="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
+            <div class="flex items-center space-x-5">
+                <div class="bg-franciosi-deep-green p-3 rounded-lg shadow-lg">
+                    <span class="text-white font-black text-2xl italic tracking-tighter">F</span>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-black tracking-tighter text-franciosi-deep-green uppercase">Grupo Franciosi</h1>
+                    <p class="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em]">Gestão de Incidentes Fiscal (Via Planilha)</p>
+                </div>
+            </div>
+            <a href="https://docs.google.com/spreadsheets/d/1vQfTSwcU7L8DBM9NtE-Y3IVsorRolm88dZPXotn085RY50OrOUZLdAqBpPQBHRJ1e7-4o6306iAvzrp/edit" target="_blank" class="bg-franciosi-deep-green text-white px-8 py-2.5 rounded-lg font-bold text-xs hover:bg-opacity-90 transition-all shadow-md uppercase tracking-wider">
+                ✎ Editar Planilha
+            </a>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-10">
+        <div id="loading" class="text-center py-10 font-bold text-slate-400 uppercase animate-pulse">Carregando dados da planilha...</div>
+        
+        <div id="dashboard-content" class="hidden">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
+                <div class="kpi-card"><p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Total Geral</p><p id="total-val" class="text-4xl font-black text-franciosi-deep-green">0</p></div>
+                <div class="kpi-card border-l-amber-500"><p class="text-amber-500 text-[10px] font-bold uppercase tracking-widest mb-1">Em Aberto</p><p id="pending-val" class="text-4xl font-black text-slate-800">0</p></div>
+                <div class="kpi-card border-l-blue-500"><p class="text-blue-500 text-[10px] font-bold uppercase tracking-widest mb-1">Concluídos</p><p id="solved-val" class="text-4xl font-black text-slate-800">0</p></div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden">
+                <div class="flex bg-slate-50 border-b border-slate-200">
+                    <button onclick="trocarAba('abertos')" id="btn-abertos" class="px-10 py-5 text-xs font-bold uppercase tracking-widest tab-active">⚠️ Pendências</button>
+                    <button onclick="trocarAba('concluidos')" id="btn-concluidos" class="px-10 py-5 text-xs font-bold uppercase tracking-widest text-slate-400">✅ Histórico</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead class="bg-white text-slate-400 text-[9px] font-bold uppercase tracking-widest border-b">
+                            <tr>
+                                <th class="px-8 py-5">Nº Ticket</th>
+                                <th class="px-8 py-5">Descrição</th>
+                                <th class="px-8 py-5">Observações</th>
+                                <th class="px-8 py-5 text-center">Prioridade</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-lista" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQfTSwcU7L8DBM9NtE-Y3IVsorRolm88dZPXotn085RY50OrOUZLdAqBpPQBHRJ1e7-4o6306iAvzrp/pub?gid=0&single=true&output=csv';
+        let database = [];
+        let abaAtual = 'abertos';
+
+        async function buscarDados() {
+            try {
+                const resposta = await fetch(CSV_URL);
+                const texto = await resposta.text();
+                const linhas = texto.split('\n').slice(1); // Remove o cabeçalho
+                
+                database = linhas.map(linha => {
+                    const colunas = linha.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/); // Divide por vírgula corretamente
+                    return {
+                        ticket: colunas[0]?.replace(/"/g, ''),
+                        desc: colunas[1]?.replace(/"/g, ''),
+                        obs: colunas[2]?.replace(/"/g, ''),
+                        enc: colunas[3]?.replace(/"/g, '').toUpperCase().trim(),
+                        prio: colunas[4]?.replace(/"/g, '').toUpperCase().trim()
+                    };
+                }).filter(item => item.ticket); // Remove linhas vazias
+
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('dashboard-content').classList.remove('hidden');
+                carregar();
+            } catch (erro) {
+                document.getElementById('loading').innerText = "Erro ao carregar dados. Verifique a publicação da planilha.";
+            }
+        }
+
+        function carregar() {
+            const corpo = document.getElementById('tabela-lista');
+            const prioridadePeso = { "ALTA": 1, "MÉDIA": 2, "BAIXA": 3, "": 4 };
+
+            let filtrados = database.filter(c => abaAtual === 'abertos' ? (c.enc !== 'SIM') : (c.enc === 'SIM'));
+            
+            if(abaAtual === 'abertos') {
+                filtrados.sort((a,b) => (prioridadePeso[a.prio] || 4) - (prioridadePeso[b.prio] || 4));
+            }
+
+            corpo.innerHTML = filtrados.map(c => {
+                const corPrio = c.prio === 'ALTA' ? 'bg-red-100 text-red-700' : (c.prio === 'MÉDIA' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700');
+                return `<tr>
+                    <td class="px-8 py-5 font-bold text-franciosi-deep-green">${c.ticket}</td>
+                    <td class="px-8 py-5 text-slate-700">${c.desc}</td>
+                    <td class="px-8 py-5 text-slate-400 italic">${c.obs}</td>
+                    <td class="px-8 py-5 text-center">
+                        <span class="px-4 py-1 rounded-full font-bold text-[9pt] ${c.enc === 'SIM' ? 'bg-slate-100 text-slate-400' : corPrio}">
+                            ${c.enc === 'SIM' ? 'CONCLUÍDO' : c.prio}
+                        </span>
+                    </td>
+                </tr>`;
+            }).join('');
+
+            document.getElementById('total-val').innerText = database.length;
+            document.getElementById('pending-val').innerText = database.filter(c => c.enc !== 'SIM').length;
+            document.getElementById('solved-val').innerText = database.filter(c => c.enc === 'SIM').length;
+        }
+
+        function trocarAba(a) {
+            abaAtual = a;
+            document.getElementById('btn-abertos').className = a === 'abertos' ? 'px-10 py-5 text-xs font-bold uppercase tracking-widest tab-active' : 'px-10 py-5 text-xs font-bold uppercase tracking-widest text-slate-400';
+            document.getElementById('btn-concluidos').className = a === 'concluidos' ? 'px-10 py-5 text-xs font-bold uppercase tracking-widest tab-active' : 'px-10 py-5 text-xs font-bold uppercase tracking-widest text-slate-400';
+            carregar();
+        }
+
+        window.onload = buscarDados;
+    </script>
+</body>
+</html>
